@@ -1,3 +1,3 @@
-[submodule "pika"]
-	path = pika
-	url = https://github.com/pika/pika/
+[submodule "3rdparty/pika"]
+	path = 3rdparty/pika
+	url = git@github.com:pika/pika.git
