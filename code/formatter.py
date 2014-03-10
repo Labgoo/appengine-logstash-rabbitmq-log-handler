@@ -96,6 +96,7 @@ class LogstashFormatter(LogstashFormatterBase):
             'type': self.message_type,
 
             # Extra Fields
+            'request_id': env['REQUEST_LOG_ID'],
             'appid': app_identity.get_application_id(),
             'version_id': env['CURRENT_VERSION_ID'],
             'instance_id': env['INSTANCE_ID'],
