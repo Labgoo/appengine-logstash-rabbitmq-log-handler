@@ -1,0 +1,3 @@
+[submodule "pika"]
+	path = pika
+	url = https://github.com/pika/pika/
