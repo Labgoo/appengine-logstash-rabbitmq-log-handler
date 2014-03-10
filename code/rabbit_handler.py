@@ -3,7 +3,6 @@ from logging.handlers import SocketHandler
 from urlparse import urlparse
 from amqplib import client_0_8 as amqp
 from clientstack import ClientStack
-
 import formatter
 
 _ifnone = lambda v, x: x if v is None else v
