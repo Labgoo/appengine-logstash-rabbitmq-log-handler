@@ -1,7 +1,7 @@
 from logging import Filter
 from logging.handlers import SocketHandler
 from urlparse import urlparse
-from ..amqplib import client_0_8 as amqp
+from amqplib import client_0_8 as amqp
 from clientstack import ClientStack
 
 import formatter
