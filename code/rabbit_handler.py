@@ -4,6 +4,8 @@ from urlparse import urlparse
 from amqplib import client_0_8 as amqp
 from clientstack import ClientStack
 import formatter
+import threading
+import logging
 
 _ifnone = lambda v, x: x if v is None else v
 
@@ -16,9 +18,10 @@ class LogStashRabbitHandlerWrapper(object):
     def __get_handler(self):
         handler = self.handler_stack.get()
         if handler is None:
+            logging.info("Creating new AmqpLogstashHandler for thread %s", threading.currentThread())
             handler = LogStashRabbitHandler(self.url)
             self.handler_stack.push(handler)
-        return handler
+        return self.handler_stack.get()
 
     def __getattr__(self, attr):
         orig_attr = self.__get_handler().__getattribute__(attr)
