@@ -23,7 +23,7 @@ class Log2Logstash2(PipelineBase):
         pass
 
     def run(self, params, start_time, end_time, modules, shards):
-        output_writer_spec = "libs.logstash.db_log_reader.Logstash2UdpWriter"
+        output_writer_spec = "libs.logstash.db_log_reader.LogstashRabbitWriter"
         yield mapreduce_pipeline.MapperPipeline(
             "log2stash",
             "libs.logstash.db_log_reader.log2stash",
@@ -65,16 +65,16 @@ def add_extra_fields(message_dict, extra_fields):
     return message_dict
 
 
-class Logstash2UdpWriter(OutputWriter):
+class LogstashRabbitWriter(OutputWriter):
     def __init__(self, server, service_name=None, level=None):
-        super(Logstash2UdpWriter, self).__init__()
+        super(LogstashRabbitWriter, self).__init__()
 
         self.server = server
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_INFO
 
         self.handler = LogStashRabbitHandler(
-            settings.AMQP_PROT % 'log-map.mallpad.com') if settings.application_name == 'mallpad-online-dev' else None
+            settings.AMQP_PROT % 'log-map.mallpad.com') if settings.application_name == 'localhost' else None
 
     @classmethod
     def validate(cls, mapper_spec):
@@ -141,11 +141,11 @@ class Logstash2UdpWriter(OutputWriter):
 
             app_log_data = {
                 "host": app_identity.get_application_id(),
-                "timestamp": app_log.time,
+                "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
                 "level": logging_level(app_log.level),
                 "facility": data.get("facility"),
                 "message": app_log.message,
-                "_request_id": data.get("_request_id")}
+                "request_id": data.get("_request_id")}
 
             self.handler.send(self.handler.formatter.serialize(app_log_data))
 
@@ -155,8 +155,7 @@ def log2stash(l):
         return logservice.LOG_LEVEL_INFO if status < 400 else logservice.LOG_LEVEL_ERROR
 
     yield {
-        "version": "1.0",
-        "timestamp": l.start_time,
+        "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(l.start_time)),
         "level": logging_level(level_from_status(l.status)),
         "facility": l.resource,
         "message": "%s %s" % (l.method, l.resource),
@@ -166,6 +165,7 @@ def log2stash(l):
         "latency": l.latency,
         "cost": l.cost,
         "status": l.status,
+        "host": l.host,
         "module": l.module_id,
         "user_agent": l.user_agent if l.user_agent else None,
         'version_id': os.environ['CURRENT_VERSION_ID'],
