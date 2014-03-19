@@ -74,7 +74,7 @@ class LogstashRabbitWriter(OutputWriter):
         self.level = level or logservice.LOG_LEVEL_INFO
 
         self.handler = LogStashRabbitHandler(
-            settings.AMQP_PROT % 'log-map.mallpad.com') if settings.application_name == 'localhost' else None
+            settings.AMQP_PROT % 'log-map.mallpad.com') if settings.application_name == 'mallpad-online-dev' else None
 
     @classmethod
     def validate(cls, mapper_spec):
