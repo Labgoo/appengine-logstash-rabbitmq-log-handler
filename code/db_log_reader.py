@@ -1,5 +1,6 @@
 import os
 import time
+import re
 from datetime import datetime
 
 import webapp2
@@ -66,15 +67,13 @@ def add_extra_fields(message_dict, extra_fields):
 
 
 class LogstashRabbitWriter(OutputWriter):
-    def __init__(self, server, service_name=None, level=None):
+    def __init__(self, server, host, service_name=None, level=None):
         super(LogstashRabbitWriter, self).__init__()
-
         self.server = server
+        self.host = host
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_INFO
-
-        self.handler = LogStashRabbitHandler(
-            settings.AMQP_PROT % 'log-map.mallpad.com') if settings.application_name == 'mallpad-online-dev' else None
+        self.handler = LogStashRabbitHandler(host if host is not None else None)
 
     @classmethod
     def validate(cls, mapper_spec):
@@ -91,7 +90,7 @@ class LogstashRabbitWriter(OutputWriter):
     @classmethod
     def from_json(cls, state):
         state = state or {}
-        return cls(state.get("server"), state.get("service_name"), level=state.get("level"))
+        return cls(state.get("server"), state.get("host"), state.get("service_name"), level=state.get("level"))
 
     def finalize(self, ctx, shard_state):
         pass
@@ -103,6 +102,7 @@ class LogstashRabbitWriter(OutputWriter):
     def to_json(self):
         return {
             "server": self.server,
+            "host": self.host,
             "service_name": self.service_name,
             "level": self.level}
 
@@ -111,6 +111,7 @@ class LogstashRabbitWriter(OutputWriter):
         writer_spec = _get_params(mr_spec.mapper, allow_old=False)
         return cls(
             writer_spec["server"],
+            writer_spec["host"],
             writer_spec.get("service_name"),
             level=writer_spec.get("level"))
 
@@ -130,7 +131,9 @@ class LogstashRabbitWriter(OutputWriter):
         else:
             request_data = data
 
-        self.handler.send(self.handler.formatter.serialize(request_data))
+        message = self.handler.formatter.serialize(request_data)
+        print message
+        self.handler.send(message)
 
         for app_log in app_logs:
             if app_log.level < self.level:
@@ -147,7 +150,9 @@ class LogstashRabbitWriter(OutputWriter):
                 "message": app_log.message,
                 "request_id": data.get("_request_id")}
 
-            self.handler.send(self.handler.formatter.serialize(app_log_data))
+            message = self.handler.formatter.serialize(app_log_data)
+            print message
+            self.handler.send(message)
 
 
 def log2stash(l):
@@ -189,6 +194,11 @@ class LogUploadHandler(webapp2.RequestHandler):
     def get_server_name(cls):
         raise NotImplementedError("get_server_name() not implemented in %s" % cls)
 
+    @classmethod
+    def get_logstash_host(cls):
+        raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
+
+
     def get(self):
         def get_int(name, default_value):
             value = self.request.get(name)
@@ -219,7 +229,9 @@ class LogUploadHandler(webapp2.RequestHandler):
         version = os.environ["CURRENT_VERSION_ID"].split(".")[0]
         shards = get_int('shards', default_shards)
 
-        params = {"server": self.get_server_name(), "level": logservice.LOG_LEVEL_DEBUG}
+        params = {"server": self.get_server_name(),
+                  "level": logservice.LOG_LEVEL_DEBUG,
+                  "host": self.get_logstash_host()}
 
         p = Log2Logstash2(params, end_time, now, self.get_module_versions(version), shards)
         p.start()
