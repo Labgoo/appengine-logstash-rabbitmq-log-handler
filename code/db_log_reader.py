@@ -1,7 +1,6 @@
 import os
 import time
 from datetime import datetime
-import logging
 import webapp2
 from google.appengine.api import app_identity
 from google.appengine.ext import ndb
@@ -65,8 +64,9 @@ def add_extra_fields(message_dict, extra_fields):
 
 
 class LogstashRabbitWriter(OutputWriter):
-    def __init__(self, host, service_name=None, level=None):
+    def __init__(self,app_id, host, service_name=None, level=None):
         super(LogstashRabbitWriter, self).__init__()
+        self.app_id = app_id
         self.host = host
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_INFO
@@ -87,7 +87,7 @@ class LogstashRabbitWriter(OutputWriter):
     @classmethod
     def from_json(cls, state):
         state = state or {}
-        return cls(state.get("host"), state.get("service_name"), level=state.get("level"))
+        return cls(state.get("app_id"), state.get("host"), state.get("service_name"), level=state.get("level"))
 
     def finalize(self, ctx, shard_state):
         pass
@@ -98,6 +98,7 @@ class LogstashRabbitWriter(OutputWriter):
 
     def to_json(self):
         return {
+            "app_id": self.app_id,
             "host": self.host,
             "service_name": self.service_name,
             "level": self.level}
@@ -106,6 +107,7 @@ class LogstashRabbitWriter(OutputWriter):
     def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
         writer_spec = _get_params(mr_spec.mapper, allow_old=False)
         return cls(
+            writer_spec["app_id"],
             writer_spec["host"],
             writer_spec.get("service_name"),
             level=writer_spec.get("level"))
@@ -125,6 +127,7 @@ class LogstashRabbitWriter(OutputWriter):
             del request_data["app_logs"]
         else:
             request_data = data
+        request_data['app_id'] = self.app_id
         self.handler.send(self.handler.formatter.serialize(request_data))
 
         for app_log in app_logs:
@@ -135,6 +138,7 @@ class LogstashRabbitWriter(OutputWriter):
                 continue
 
             app_log_data = {
+                "app_id": self.app_id,
                 "host": app_identity.get_application_id(),
                 "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
                 "level": logging_level(app_log.level),
@@ -183,6 +187,9 @@ class LogUploadHandler(webapp2.RequestHandler):
     def get_logstash_host(cls):
         raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
 
+    @classmethod
+    def get_app_id(cls):
+        raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
 
     def get(self):
         def get_int(name, default_value):
@@ -216,6 +223,7 @@ class LogUploadHandler(webapp2.RequestHandler):
         shards = get_int('shards', default_shards)
 
         params = {
+            "app_id": self.get_app_id(),
             "level": logservice.LOG_LEVEL_DEBUG,
             "host": self.get_logstash_host()}
         versions = self.get_module_versions(version)
