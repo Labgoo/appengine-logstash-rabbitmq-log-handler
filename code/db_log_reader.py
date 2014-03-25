@@ -1,8 +1,7 @@
 import os
 import time
-import re
 from datetime import datetime
-
+import logging
 import webapp2
 from google.appengine.api import app_identity
 from google.appengine.ext import ndb
@@ -13,7 +12,6 @@ from rabbit_handler import LogStashRabbitHandler
 from mapreduce import mapreduce_pipeline
 from mapreduce.output_writers import OutputWriter, _get_params
 from mapreduce.pipeline_base import PipelineBase
-from shared import settings
 
 
 default_shards = 1
@@ -67,9 +65,8 @@ def add_extra_fields(message_dict, extra_fields):
 
 
 class LogstashRabbitWriter(OutputWriter):
-    def __init__(self, server, host, service_name=None, level=None):
+    def __init__(self, host, service_name=None, level=None):
         super(LogstashRabbitWriter, self).__init__()
-        self.server = server
         self.host = host
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_INFO
@@ -90,7 +87,7 @@ class LogstashRabbitWriter(OutputWriter):
     @classmethod
     def from_json(cls, state):
         state = state or {}
-        return cls(state.get("server"), state.get("host"), state.get("service_name"), level=state.get("level"))
+        return cls(state.get("host"), state.get("service_name"), level=state.get("level"))
 
     def finalize(self, ctx, shard_state):
         pass
@@ -101,7 +98,6 @@ class LogstashRabbitWriter(OutputWriter):
 
     def to_json(self):
         return {
-            "server": self.server,
             "host": self.host,
             "service_name": self.service_name,
             "level": self.level}
@@ -110,13 +106,12 @@ class LogstashRabbitWriter(OutputWriter):
     def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
         writer_spec = _get_params(mr_spec.mapper, allow_old=False)
         return cls(
-            writer_spec["server"],
             writer_spec["host"],
             writer_spec.get("service_name"),
             level=writer_spec.get("level"))
 
     def write(self, data):
-        if not self.server or not self.handler:
+        if not self.handler:
             return
         if data.get('facility', '').startswith('/mapreduce'):
             return
@@ -130,9 +125,7 @@ class LogstashRabbitWriter(OutputWriter):
             del request_data["app_logs"]
         else:
             request_data = data
-
-        message = self.handler.formatter.serialize(request_data)
-        self.handler.send(message)
+        self.handler.send(self.handler.formatter.serialize(request_data))
 
         for app_log in app_logs:
             if app_log.level < self.level:
@@ -148,9 +141,7 @@ class LogstashRabbitWriter(OutputWriter):
                 "facility": data.get("facility"),
                 "message": app_log.message,
                 "request_id": data.get("_request_id")}
-
-            message = self.handler.formatter.serialize(app_log_data)
-            self.handler.send(message)
+            self.handler.send(self.handler.formatter.serialize(app_log_data))
 
 
 def log2stash(l):
@@ -189,10 +180,6 @@ class LogUploadHandler(webapp2.RequestHandler):
         raise NotImplementedError("get_module_versions() not implemented in %s" % cls)
 
     @classmethod
-    def get_server_name(cls):
-        raise NotImplementedError("get_server_name() not implemented in %s" % cls)
-
-    @classmethod
     def get_logstash_host(cls):
         raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
 
@@ -212,6 +199,7 @@ class LogUploadHandler(webapp2.RequestHandler):
             return value
 
         now = time.time()
+
         logging_config = LoggingConfig.get_by_id("main")
 
         if logging_config is None:
@@ -227,11 +215,11 @@ class LogUploadHandler(webapp2.RequestHandler):
         version = os.environ["CURRENT_VERSION_ID"].split(".")[0]
         shards = get_int('shards', default_shards)
 
-        params = {"server": self.get_server_name(),
-                  "level": logservice.LOG_LEVEL_DEBUG,
-                  "host": self.get_logstash_host()}
-
-        p = Log2Logstash2(params, end_time, now, self.get_module_versions(version), shards)
+        params = {
+            "level": logservice.LOG_LEVEL_DEBUG,
+            "host": self.get_logstash_host()}
+        versions = self.get_module_versions(version)
+        p = Log2Logstash2(params, end_time, now, versions, shards)
         p.start()
 
         logging_config.put()
