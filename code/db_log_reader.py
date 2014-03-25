@@ -73,7 +73,7 @@ class LogstashRabbitWriter(OutputWriter):
         self.host = host
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_INFO
-        self.handler = LogStashRabbitHandler(host if host is not None else None)
+        self.handler = LogStashRabbitHandler(host) if host else None
 
     @classmethod
     def validate(cls, mapper_spec):
@@ -132,7 +132,6 @@ class LogstashRabbitWriter(OutputWriter):
             request_data = data
 
         message = self.handler.formatter.serialize(request_data)
-        print message
         self.handler.send(message)
 
         for app_log in app_logs:
@@ -151,7 +150,6 @@ class LogstashRabbitWriter(OutputWriter):
                 "request_id": data.get("_request_id")}
 
             message = self.handler.formatter.serialize(app_log_data)
-            print message
             self.handler.send(message)
 
 
