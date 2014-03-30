@@ -15,6 +15,36 @@ amqplib 1.2.0 - bundled
 The `code` folder inside this repository should be symlinked to somewhere under your app, preferably under a `libs` folder otherwise you would have to fork this repository.
 ####Modifying appengine_config.py
 Your `appengine_config.py` file should be modified to add the logging handler to the default logger. See an example file at [appengine_config.py](/example_appengine_config.py)
+
+
+##Map Reduce Job Logstash
+
+include the map-reduce [lib](https://developers.google.com/appengine/docs/python/dataprocessing/mapreduce_library) into your codebase
+
+Inherit from [LogUploadHandler](code/db_log_reader.py)
+
+Example :
+
+```python
+class MallpadLogsUploadHandler(LogUploadHandler):
+    def get_module_versions(self, version_id):
+        return [('module1', version_id), ('module2', version_id)]
+
+    def get_logstash_host(self):
+        return 'log.yourcompany.com'
+
+    def get_app_id(self):
+        return 'application_id'
+```
+
+Create the relevant routes entry and a cron entry for that handler
+
+```
+- description: dump logs to logstash
+  url: /scheduler/logs/upload
+  schedule: every 1 minutes synchronized
+```
+
 ##License
 GPL v2. Please refer to the [license](/LICENSE) file for a complete license declaration.
 
