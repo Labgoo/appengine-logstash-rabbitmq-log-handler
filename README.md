@@ -13,9 +13,6 @@ amqplib 1.2.0 - bundled
 ####Symlinking into the application folder
  
 The `code` folder inside this repository should be symlinked to somewhere under your app, preferably under a `libs` folder otherwise you would have to fork this repository.
-####Modifying appengine_config.py
-Your `appengine_config.py` file should be modified to add the logging handler to the default logger. See an example file at [appengine_config.py](/example_appengine_config.py)
-
 
 ##Map Reduce Job Logstash
 
@@ -31,7 +28,7 @@ class MallpadLogsUploadHandler(LogUploadHandler):
         return [('module1', version_id), ('module2', version_id)]
 
     def get_logstash_host(self):
-        return 'log.yourcompany.com'
+        return 'amqp://user:pass@log.yourcompany.com'
 
     def get_app_id(self):
         return 'application_id'
