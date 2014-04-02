@@ -227,6 +227,7 @@ class LogUploadHandler(webapp2.RequestHandler):
             "app_id": self.get_app_id(),
             "level": logservice.LOG_LEVEL_DEBUG,
             "host": 'amqp://guest:guest@%s/' % self.get_logstash_host()}
+
         versions = self.get_module_versions(version)
         p = Log2Logstash2(params, end_time, now, versions, shards)
         p.start()
