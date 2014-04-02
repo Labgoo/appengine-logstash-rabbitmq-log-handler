@@ -64,7 +64,7 @@ def add_extra_fields(message_dict, extra_fields):
 
 
 class LogstashRabbitWriter(OutputWriter):
-    def __init__(self,app_id, host, service_name=None, level=None):
+    def __init__(self, app_id, host, service_name=None, level=None):
         super(LogstashRabbitWriter, self).__init__()
         self.app_id = app_id
         self.host = host
@@ -95,6 +95,7 @@ class LogstashRabbitWriter(OutputWriter):
     @classmethod
     def get_filenames(cls, mapreduce_state):
         pass
+
 
     def to_json(self):
         return {
@@ -225,7 +226,7 @@ class LogUploadHandler(webapp2.RequestHandler):
         params = {
             "app_id": self.get_app_id(),
             "level": logservice.LOG_LEVEL_DEBUG,
-            "host": self.get_logstash_host()}
+            "host": 'amqp://guest:guest@%s/' % self.get_logstash_host()}
         versions = self.get_module_versions(version)
         p = Log2Logstash2(params, end_time, now, versions, shards)
         p.start()
