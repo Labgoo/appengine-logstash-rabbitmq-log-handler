@@ -145,7 +145,7 @@ class LogstashRabbitWriter(OutputWriter):
                 "level": logging_level(app_log.level),
                 "facility": data.get("facility"),
                 "message": app_log.message,
-                "request_id": data.get("_request_id")}
+                "request_id": data.get("request_id")}
             self.handler.send(self.handler.formatter.serialize(app_log_data))
 
 
