@@ -23,7 +23,7 @@ Inherit from [LogUploadHandler](code/db_log_reader.py)
 Example :
 
 ```python
-class MallpadLogsUploadHandler(LogUploadHandler):
+class LogsUploadHandler(LogUploadHandler):
     def get_module_versions(self, version_id):
         return [('module1', version_id), ('module2', version_id)]
 
