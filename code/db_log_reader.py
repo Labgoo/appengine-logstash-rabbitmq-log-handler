@@ -2,6 +2,7 @@ import os
 import time
 from datetime import datetime
 import webapp2
+import ast
 from google.appengine.api import app_identity
 from google.appengine.ext import ndb
 from google.appengine.api import logservice
@@ -69,7 +70,7 @@ class LogstashRabbitWriter(OutputWriter):
         self.app_id = app_id
         self.host = host
         self.service_name = service_name or app_identity.get_application_id()
-        self.level = level or logservice.LOG_LEVEL_INFO
+        self.level = level or logservice.LOG_LEVEL_DEBUG
         self.handler = LogStashRabbitHandler(host) if host else None
 
     @classmethod
@@ -138,14 +139,20 @@ class LogstashRabbitWriter(OutputWriter):
             if app_log.message.startswith('Saved; key: __appstats__'):
                 continue
 
-            app_log_data = {
+            # Messages that start with '{' are assumed to be a serialized dict.
+            if app_log.message.startswith('{'):
+                structured_message = ast.literal_eval(app_log.message)
+            else:
+                structured_message = {'message': app_log.message}
+
+            app_log_data = dict({
                 "app_id": self.app_id,
                 "host": app_identity.get_application_id(),
                 "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
                 "level": logging_level(app_log.level),
                 "facility": data.get("facility"),
                 "message": app_log.message,
-                "request_id": data.get("request_id")}
+                "request_id": data.get("request_id")}, **structured_message)
             self.handler.send(self.handler.formatter.serialize(app_log_data))
 
 
