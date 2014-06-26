@@ -70,7 +70,7 @@ class LogstashRabbitWriter(OutputWriter):
         self.app_id = app_id
         self.host = host
         self.service_name = service_name or app_identity.get_application_id()
-        self.level = level or logservice.LOG_LEVEL_INFO
+        self.level = level or logservice.LOG_LEVEL_DEBUG
         self.handler = LogStashRabbitHandler(host) if host else None
 
     @classmethod
