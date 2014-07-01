@@ -129,7 +129,12 @@ class LogstashRabbitWriter(OutputWriter):
         else:
             request_data = data
         request_data['app_id'] = self.app_id
-        self.handler.send(self.handler.formatter.serialize(request_data))
+
+        serialized_app_logs = [{
+            "level": request_data['level'],
+            "log_time": request_data['log_time'],
+            "message": request_data['message']
+        }]
 
         for app_log in app_logs:
             if app_log.level < self.level:
@@ -139,15 +144,15 @@ class LogstashRabbitWriter(OutputWriter):
                 continue
 
             app_log_data = {
-                "app_id": self.app_id,
-                "host": app_identity.get_application_id(),
                 "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
                 "level": logging_level(app_log.level),
-                "facility": data.get("facility"),
                 "message": app_log.message,
-                "request_id": data.get("request_id")}
-            self.handler.send(self.handler.formatter.serialize(app_log_data))
+            }
+            serialized_app_logs.append(app_log_data)
 
+
+        request_data['messages'] = serialized_app_logs
+        self.handler.send(self.handler.formatter.serialize(request_data))
 
 def log2stash(l):
     def level_from_status(status):
