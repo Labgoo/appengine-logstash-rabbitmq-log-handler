@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from distutils.core import setup
-from package import __version__
 
 setup(
     name='appengine-logstash-rabbitmq-log-hanlder',
