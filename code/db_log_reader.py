@@ -151,12 +151,9 @@ class LogstashRabbitWriter(OutputWriter):
                 structured_message = {'message': app_log.message}
 
             app_log_data = dict({
-                "app_id": self.app_id,
-                "host": app_identity.get_application_id(),
                 "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
                 "level": logging_level(app_log.level),
-                "message": app_log.message,
-                "request_id": data.get("request_id")}, **structured_message)
+                "message": app_log.message}, **structured_message)
             serialized_app_logs.append(app_log_data)
 
         request_data['messages'] = serialized_app_logs
@@ -170,6 +167,7 @@ def log2stash(l):
         "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(l.start_time)),
         "level": logging_level(level_from_status(l.status)),
         "facility": l.resource,
+        "path": l.resource.split('?', 1)[0],
         "message": "%s %s" % (l.method, l.resource),
         "app_logs": l.app_logs,
         "request_id": l.request_id,
@@ -181,6 +179,10 @@ def log2stash(l):
         "module": l.module_id,
         "user_agent": l.user_agent if l.user_agent else None,
         'version_id': os.environ['CURRENT_VERSION_ID'],
+        'url_map_entry': l.url_map_entry,
+        'task_name': l.task_name,
+        'task_queue_name': l.task_queue_name,
+        'response_size': l.response_size,
     }
 
 
