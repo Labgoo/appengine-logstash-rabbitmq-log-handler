@@ -182,6 +182,7 @@ def log2stash(l):
         'url_map_entry': l.url_map_entry,
         'task_name': l.task_name,
         'task_queue_name': l.task_queue_name,
+        'referrer': l.referrer,
         'response_size': l.response_size,
     }
 
