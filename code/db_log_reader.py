@@ -1,5 +1,6 @@
 import os
 import time
+import json
 from datetime import datetime
 import webapp2
 import ast
@@ -147,6 +148,9 @@ class LogstashRabbitWriter(OutputWriter):
             # Messages that start with '{' are assumed to be a serialized dict.
             if app_log.message.startswith('{'):
                 structured_message = ast.literal_eval(app_log.message)
+            elif "\n_______\n" in app_log.message:
+                __, json_str = app_log.message.split("\n_______\n", 1)
+                structured_message = json.loads(json_str)
             else:
                 structured_message = {'message': app_log.message}
 
