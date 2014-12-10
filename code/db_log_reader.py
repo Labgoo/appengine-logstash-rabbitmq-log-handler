@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import json
@@ -133,10 +134,10 @@ class LogstashRabbitWriter(OutputWriter):
         request_data['app_id'] = self.app_id
 
         serialized_app_logs = [{
-            "level": request_data['level'],
-            "log_time": request_data['log_time'],
-            "message": request_data['message']
-        }]
+                                   "level": request_data['level'],
+                                   "log_time": request_data['log_time'],
+                                   "message": request_data['message']
+                               }]
 
         for app_log in app_logs:
             if app_log.level < self.level:
@@ -150,18 +151,23 @@ class LogstashRabbitWriter(OutputWriter):
                 structured_message = ast.literal_eval(app_log.message)
             elif "\n_______\n" in app_log.message:
                 __, json_str = app_log.message.split("\n_______\n", 1)
-                structured_message = json.loads(json_str)
+                try:
+                    structured_message = json.loads(json_str)
+                except Exception as e:
+                    logging.info('Could not parse json message %s ', json_str)
+                    continue
             else:
                 structured_message = {'message': app_log.message}
 
             app_log_data = dict({
-                "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
-                "level": logging_level(app_log.level),
-                "message": app_log.message}, **structured_message)
+                                    "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
+                                    "level": logging_level(app_log.level),
+                                    "message": app_log.message}, **structured_message)
             serialized_app_logs.append(app_log_data)
 
         request_data['messages'] = serialized_app_logs
         self.handler.send(self.handler.formatter.serialize(request_data))
+
 
 def log2stash(l):
     def level_from_status(status):
