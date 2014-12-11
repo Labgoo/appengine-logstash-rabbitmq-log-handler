@@ -14,6 +14,7 @@ from rabbit_handler import LogStashRabbitHandler
 from mapreduce import mapreduce_pipeline
 from mapreduce.output_writers import OutputWriter, _get_params
 from mapreduce.pipeline_base import PipelineBase
+from shared.logging_utils import short_log
 
 
 default_shards = 1
@@ -154,7 +155,7 @@ class LogstashRabbitWriter(OutputWriter):
                 try:
                     structured_message = json.loads(json_str)
                 except Exception as e:
-                    logging.info('Could not parse json message %s ', json_str)
+                    logging.error('Could not parse json message %s ', short_log(json_str, 100))
                     continue
             else:
                 structured_message = {'message': app_log.message}
