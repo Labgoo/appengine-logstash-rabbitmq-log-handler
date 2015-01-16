@@ -72,7 +72,6 @@ class LogstashRabbitWriter(OutputWriter):
         super(LogstashRabbitWriter, self).__init__()
         self.app_id = app_id
         self.host = host
-        self.exchange = exchange
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_DEBUG
         self.handler = LogStashRabbitHandler(host, exchange=exchange) if host else None
@@ -92,8 +91,7 @@ class LogstashRabbitWriter(OutputWriter):
     @classmethod
     def from_json(cls, state):
         state = state or {}
-        return cls(state.get("app_id"), state.get("host"), state.get("exchange"), state.get("service_name"),
-                   level=state.get("level"))
+        return cls(state.get("app_id"), state.get("host"), state.get("service_name"), level=state.get("level"))
 
     def finalize(self, ctx, shard_state):
         pass
@@ -107,7 +105,6 @@ class LogstashRabbitWriter(OutputWriter):
         return {
             "app_id": self.app_id,
             "host": self.host,
-            "exchange": self.exchange,
             "service_name": self.service_name,
             "level": self.level}
 
@@ -117,7 +114,6 @@ class LogstashRabbitWriter(OutputWriter):
         return cls(
             writer_spec["app_id"],
             writer_spec["host"],
-            writer_spec["exchange"],
             writer_spec.get("service_name"),
             level=writer_spec.get("level"))
 
