@@ -68,13 +68,13 @@ def add_extra_fields(message_dict, extra_fields):
 
 
 class LogstashRabbitWriter(OutputWriter):
-    def __init__(self, app_id, host, service_name=None, level=None):
+    def __init__(self, app_id, host, exchange, service_name=None, level=None):
         super(LogstashRabbitWriter, self).__init__()
         self.app_id = app_id
         self.host = host
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_DEBUG
-        self.handler = LogStashRabbitHandler(host) if host else None
+        self.handler = LogStashRabbitHandler(host, exchange=exchange) if host else None
 
     @classmethod
     def validate(cls, mapper_spec):
@@ -219,6 +219,10 @@ class LogUploadHandler(webapp2.RequestHandler):
     def get_app_id(cls):
         raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
 
+    @classmethod
+    def get_exchange_name(cls):
+        return 'logstash'
+
     def get(self):
         def get_int(name, default_value):
             value = self.request.get(name)
@@ -253,7 +257,8 @@ class LogUploadHandler(webapp2.RequestHandler):
         params = {
             "app_id": self.get_app_id(),
             "level": logservice.LOG_LEVEL_DEBUG,
-            "host": 'amqp://guest:guest@%s/' % self.get_logstash_host()}
+            "host": 'amqp://guest:guest@%s/' % self.get_logstash_host(),
+            "exchange": self.get_exchange_name()}
 
         versions = self.get_module_versions(version)
         p = Log2Logstash2(params, end_time, now, versions, shards)
