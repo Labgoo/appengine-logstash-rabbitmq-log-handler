@@ -106,7 +106,7 @@ class LogstashRabbitWriter(OutputWriter):
         return {
             "app_id": self.app_id,
             "host": self.host,
- 	    "echange": self.exchange,
+ 	    "exchange": self.exchange,
             "service_name": self.service_name,
             "level": self.level}
 
@@ -116,7 +116,7 @@ class LogstashRabbitWriter(OutputWriter):
         return cls(
             writer_spec["app_id"],
             writer_spec["host"],
-            writer_spec["echange"],
+            writer_spec["exchange"],
             writer_spec.get("service_name"),
             level=writer_spec.get("level"))
 
