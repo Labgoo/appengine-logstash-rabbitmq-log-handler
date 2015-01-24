@@ -14,11 +14,11 @@ from rabbit_handler import LogStashRabbitHandler
 from mapreduce import mapreduce_pipeline
 from mapreduce.output_writers import OutputWriter, _get_params
 from mapreduce.pipeline_base import PipelineBase
-from shared.logging_utils import short_log
-
 
 default_shards = 1
 
+def short_string(log_line, lenght):
+    return '%s..more(%s)' % (log_line[:lenght], len(log_line) - lenght) if len(log_line) > lenght else log_line
 
 class Log2Logstash2(PipelineBase):
     def finalized(self):
@@ -92,7 +92,8 @@ class LogstashRabbitWriter(OutputWriter):
     @classmethod
     def from_json(cls, state):
         state = state or {}
-        return cls(state.get("app_id"), state.get("host"), state.get("exchange"), state.get("service_name"), level=state.get("level"))
+        return cls(state.get("app_id"), state.get("host"), state.get("exchange"), state.get("service_name"),
+                   level=state.get("level"))
 
     def finalize(self, ctx, shard_state):
         pass
@@ -106,7 +107,7 @@ class LogstashRabbitWriter(OutputWriter):
         return {
             "app_id": self.app_id,
             "host": self.host,
- 	    "exchange": self.exchange,
+            "exchange": self.exchange,
             "service_name": self.service_name,
             "level": self.level}
 
@@ -158,7 +159,7 @@ class LogstashRabbitWriter(OutputWriter):
                 try:
                     structured_message = json.loads(json_str)
                 except Exception as e:
-                    logging.error('Could not parse json message %s ', short_log(json_str, 100))
+                    logging.error('Could not parse json message %s ', short_string(json_str, 100))
                     continue
             else:
                 structured_message = {'message': app_log.message}
