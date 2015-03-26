@@ -1,14 +1,13 @@
-import logging
 import os
 import time
-import json
+
 from datetime import datetime
 import webapp2
-import ast
 from google.appengine.api import app_identity
 from google.appengine.ext import ndb
 from google.appengine.api import logservice
 
+from gcs_handler import GCSHandler
 from rabbit_handler import LogStashRabbitHandler
 
 from mapreduce import mapreduce_pipeline
@@ -20,14 +19,37 @@ default_shards = 1
 def short_string(log_line, lenght):
     return '%s..more(%s)' % (log_line[:lenght], len(log_line) - lenght) if len(log_line) > lenght else log_line
 
-class Log2Logstash2(PipelineBase):
+class Log2LogstashRabbit(PipelineBase):
     def finalized(self):
         pass
 
     def run(self, params, start_time, end_time, modules, shards):
         output_writer_spec = "libs.logstash.db_log_reader.LogstashRabbitWriter"
         yield mapreduce_pipeline.MapperPipeline(
-            "log2stash",
+            "log2stash-rabbit",
+            "libs.logstash.db_log_reader.log2stash",
+            "mapreduce.input_readers.LogInputReader",
+            output_writer_spec=output_writer_spec,
+            params={
+                "input_reader": {
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "include_app_logs": True,
+                    "module_versions": modules
+                },
+                "output_writer": params,
+                "root_pipeline_id": self.root_pipeline_id
+            },
+            shards=shards)
+
+class Log2GCS(PipelineBase):
+    def finalized(self):
+        pass
+
+    def run(self, params, start_time, end_time, modules, shards):
+        output_writer_spec = "libs.logstash.db_log_reader.LogstashGCSWriter"
+        yield mapreduce_pipeline.MapperPipeline(
+            "log2stash-gcs",
             "libs.logstash.db_log_reader.log2stash",
             "mapreduce.input_readers.LogInputReader",
             output_writer_spec=output_writer_spec,
@@ -67,15 +89,15 @@ def add_extra_fields(message_dict, extra_fields):
     return message_dict
 
 
-class LogstashRabbitWriter(OutputWriter):
+class LogstashWriter(OutputWriter):
     def __init__(self, app_id, host, exchange, service_name=None, level=None):
-        super(LogstashRabbitWriter, self).__init__()
+        super(LogstashWriter, self).__init__()
         self.app_id = app_id
         self.host = host
         self.exchange = exchange
         self.service_name = service_name or app_identity.get_application_id()
         self.level = level or logservice.LOG_LEVEL_DEBUG
-        self.handler = LogStashRabbitHandler(host, exchange=exchange) if host else None
+        self.handler = None
 
     @classmethod
     def validate(cls, mapper_spec):
@@ -151,27 +173,25 @@ class LogstashRabbitWriter(OutputWriter):
             if app_log.message.startswith('Saved; key: __appstats__'):
                 continue
 
-            # Messages that start with '{' are assumed to be a serialized dict.
-            if app_log.message.startswith('{'):
-                structured_message = ast.literal_eval(app_log.message)
-            elif "\n_______\n" in app_log.message:
-                __, json_str = app_log.message.split("\n_______\n", 1)
-                try:
-                    structured_message = json.loads(json_str)
-                except Exception as e:
-                    logging.error('Could not parse json message %s ', short_string(json_str, 100))
-                    continue
-            else:
-                structured_message = {'message': app_log.message}
-
             app_log_data = dict({
                                     "log_time": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(app_log.time)),
                                     "level": logging_level(app_log.level),
-                                    "message": app_log.message}, **structured_message)
+                                    "message": app_log.message})
             serialized_app_logs.append(app_log_data)
 
         request_data['messages'] = serialized_app_logs
         self.handler.send(self.handler.formatter.serialize(request_data))
+
+
+class LogstashRabbitWriter(LogstashWriter):
+    def __init__(self, app_id, host, exchange, service_name=None, level=None):
+        super(LogstashRabbitWriter, self).__init__()
+        self.handler = LogStashRabbitHandler(host, exchange=exchange) if host else None
+
+class LogstashGCSWriter(LogstashWriter):
+    def __init__(self, app_id, gcs_bucket, service_name=None, level=None):
+        super(LogstashGCSWriter, self).__init__()
+        self.handler = GCSHandler(gcs_bucket)
 
 
 def log2stash(l):
@@ -210,22 +230,15 @@ class LoggingConfig(ndb.Model):
 max_logging_time = 3600 * 24  # dump dump more than 24 hours
 
 
-class LogUploadHandler(webapp2.RequestHandler):
+class UploadHandler(webapp2.RequestHandler):
+
     @classmethod
     def get_module_versions(cls, version_id):
         raise NotImplementedError("get_module_versions() not implemented in %s" % cls)
 
     @classmethod
-    def get_logstash_host(cls):
-        raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
-
-    @classmethod
     def get_app_id(cls):
         raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
-
-    @classmethod
-    def get_exchange_name(cls):
-        return 'logstash'
 
     def get(self):
         def get_int(name, default_value):
@@ -258,17 +271,47 @@ class LogUploadHandler(webapp2.RequestHandler):
         version = os.environ["CURRENT_VERSION_ID"].split(".")[0]
         shards = get_int('shards', default_shards)
 
+        self.get_logic(self.get_app_id(), logservice.LOG_LEVEL_DEBUG, end_time, now, version, shards)
+
+        logging_config.put()
+
+
+class LogRabbitUploadHandler(UploadHandler):
+
+    @classmethod
+    def get_logstash_host(cls):
+        raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
+
+    @classmethod
+    def get_exchange_name(cls):
+        return 'logstash'
+
+    def get_logic(self, app_id, level, end_time, start_time, version, shards):
         params = {
-            "app_id": self.get_app_id(),
-            "level": logservice.LOG_LEVEL_DEBUG,
+            "app_id": app_id,
+            "level": level,
             "host":  self.get_logstash_host(),
             "exchange": self.get_exchange_name()}
 
         versions = self.get_module_versions(version)
-        p = Log2Logstash2(params, end_time, now, versions, shards)
+        p = Log2LogstashRabbit(params, end_time, start_time, versions, shards)
         p.start()
 
-        logging_config.put()
 
+class LogGCSUploadHandler(UploadHandler):
+
+    @classmethod
+    def get_bucket_name(cls):
+        raise NotImplementedError("get_logstash_host() not implemented in %s" % cls)
+
+    def get_logic(self, app_id, level, end_time, start_time, version, shards):
+        params = {
+            "app_id": app_id,
+            "level": level,
+            "gcs_bucket":  self.get_bucket_name()}
+
+        versions = self.get_module_versions(version)
+        p = Log2GCS(params, end_time, start_time, versions, shards)
+        p.start()
 
 
